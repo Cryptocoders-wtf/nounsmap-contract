@@ -44,9 +44,14 @@ const config: HardhatUserConfig = {
       },
     },
   },
+  defaultNetwork: "rinkeby",  
   networks: {
     hardhat: {
       chainId: 1337,
+      forking: {
+        url: "https://eth-mainnet.alchemyapi.io/v2/" + process.env.ALCHEMY_API_KEY,
+      }      
+
     },
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
