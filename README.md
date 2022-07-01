@@ -1,5 +1,7 @@
-# Nouns love
+# NounsMap contract
 
+This repository for nounsmap contents exchange management contracts.
+Nounsmap web app : https://github.com/SingularitySociety/nounsmap-web
 
 ## Setup your wallet
 
@@ -8,12 +10,6 @@
 #### Web3 Provider
 
 Get Api key from Web3 Provider and set API KEY
-
-```
-INFURA_API_KEY = "xxxxx"
-```
-
-or
 
 ```
 ALCHEMY_API_KEY = "xxxx"
