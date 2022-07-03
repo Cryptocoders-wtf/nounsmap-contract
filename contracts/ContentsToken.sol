@@ -26,7 +26,13 @@ import { ERC721 } from './base/ERC721.sol';
 import { IERC721 } from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import { IProxyRegistry } from './external/opensea/IProxyRegistry.sol';
 import "@openzeppelin/contracts/utils/Strings.sol";
+import "hardhat/console.sol";
 
+abstract contract AuthorityTokenInterface {
+ function getCurrentVotes(address account) external virtual view returns (uint96); 
+ //Note: following function also provided by AuthorityToken, but gas cost cannot predicted, so we avoid to use
+ // function getPriorVotes(address account, uint256 blockNumber) public virtual view returns (uint96);
+}
 
 contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
     using Strings for uint256;
@@ -66,6 +72,10 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
     
     // Mapping from token ID to price
     mapping(uint256 => uint256) private prices;
+
+    // Mapping from contractID to bool
+    mapping(address => bool) private authorityContracts;
+
     
     // OpenSea's Proxy Registry
     IProxyRegistry public immutable proxyRegistry;
@@ -77,7 +87,7 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
         address _committee,
         PriceSeed memory _priceSeed,
         IProxyRegistry _proxyRegistry
-    ) ERC721('Nouns love', 'NOUN') {
+    ) ERC721('NounsMapContents', 'NMC') {
         descriptor = _descriptor;
         seeder = _seeder;
         developer = _developer;
@@ -112,6 +122,8 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
         require(_currentNounId == 0, 'First mint only'); 
         _mintTo(owner(), _currentNounId++);
         setMintTime();
+        console.log(owner());
+        console.log(address(this));
         return _mintTo(address(this), _currentNounId++);
     }
     /*
@@ -221,6 +233,32 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
     function setCommittee(address _committee) external onlyOwner {
         committee = _committee;
     }
+
+    /**
+     * @notice Set the nouns fes committee.
+     * @dev Only callable by the owner.
+     */
+    function addAuthority(address _authority) external onlyOwner {
+        authorityContracts[_authority] = true;
+    }
+
+    function Mint(address to, address authority, uint256 contentsId) public returns(uint256) {
+        console.log(authority);
+        require(authorityContracts[authority],"wrong authority specified ");
+        AuthorityTokenInterface authorityContract = AuthorityTokenInterface(authority);
+        uint96 vote = authorityContract.getCurrentVotes(msg.sender);
+        console.log(msg.sender);
+        console.log(vote);
+        require(0 < vote, "minter should have authority token");
+        console.log(to);
+        console.log(contentsId);
+        INounsSeeder.Seed memory seed = seeds[contentsId] = seeder.generateSeed(contentsId, descriptor);
+
+        _mint(msg.sender, to, contentsId);
+        emit NounCreated(contentsId, seed);
+        return contentsId;
+    }
+
     function _mintNext(address to) internal returns (uint256) {
         if (_currentNounId % 10 == 0) {
             _mintTo(developer, _currentNounId++);
