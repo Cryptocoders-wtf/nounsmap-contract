@@ -34,7 +34,16 @@ abstract contract AuthorityTokenInterface {
  // function getPriorVotes(address account, uint256 blockNumber) public virtual view returns (uint96);
 }
 
-contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
+contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
+
+    event ContentsCreated(uint256 indexed tokenId, INounsSeeder.Seed seed);
+
+    event ContentsBurned(uint256 indexed tokenId);
+
+    event ContentsBought(uint256 indexed tokenId, address newOwner);
+    
+    event MintTimeUpdated(uint256 mintTime);
+
     using Strings for uint256;
 
     // nouns fes committee address.
@@ -100,7 +109,6 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
         priceSeed.timeDelta = _priceSeed.timeDelta;
         priceSeed.expirationTime = _priceSeed.expirationTime;
 
-        mint();
     }
 
     /**
@@ -115,17 +123,29 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
     }
 
     /**
-     * @notice Mint first Noun to the owner,
+     * @notice mint from authority token owner to someone with contents,
      * @dev Call _mintTo with the to address(es).
      */
-    function mint() public override onlyOwner returns (uint256) {
-        require(_currentNounId == 0, 'First mint only'); 
-        _mintTo(owner(), _currentNounId++);
+
+    function mint(address to, address authority, uint256 contentsId) public returns(uint256) {
+        console.log(authority);
+        require(authorityContracts[authority],"wrong authority specified ");
+        AuthorityTokenInterface authorityContract = AuthorityTokenInterface(authority);
+        uint96 vote = authorityContract.getCurrentVotes(msg.sender);
+        console.log(msg.sender);
+        console.log(vote);
+        require(0 < vote, "minter should have authority token");
+        console.log(to);
+        console.log(contentsId);
+        INounsSeeder.Seed memory seed = seeds[contentsId] = seeder.generateSeed(contentsId, descriptor);
+
+        _mint(msg.sender, to, contentsId);
         setMintTime();
-        console.log(owner());
-        console.log(address(this));
-        return _mintTo(address(this), _currentNounId++);
+        emit ContentsCreated(contentsId, seed);
+        return contentsId;
     }
+         
+
     /*
      * @notice
      * Buy noun and mint new noun along with a possible developer reward Noun.
@@ -143,7 +163,7 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
         prices[tokenId] = msg.value;
         buyTransfer(to, tokenId);
         
-        emit NounBought(tokenId, to);
+        emit ContentsBought(tokenId, to);
         return _mintNext(address(this));
     }
     /*
@@ -193,13 +213,13 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
     /**
      * @notice Burn a noun.
      */
-    function burn(uint256 nounId) public override onlyOwner {
+    function burn(uint256 nounId) public onlyOwner {
         require(_exists(nounId), 'NounsToken: URI query for nonexistent token');
         if (_currentNounId - 1 == nounId) {
             _mintNext(address(this));
         }
         _burn(nounId);
-        emit NounBurned(nounId);
+        emit ContentsBurned(nounId);
     }
 
     /**
@@ -215,7 +235,7 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
      * @notice Similar to `tokenURI`, but always serves a base64 encoded data URI
      * with the JSON contents directly inlined.
      */
-    function dataURI(uint256 tokenId) public view override returns (string memory) {
+    function dataURI(uint256 tokenId) public view returns (string memory) {
         require(_exists(tokenId), 'NounsToken: URI query for nonexistent token');
 
         string memory nounId = tokenId.toString();
@@ -242,23 +262,6 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
         authorityContracts[_authority] = true;
     }
 
-    function Mint(address to, address authority, uint256 contentsId) public returns(uint256) {
-        console.log(authority);
-        require(authorityContracts[authority],"wrong authority specified ");
-        AuthorityTokenInterface authorityContract = AuthorityTokenInterface(authority);
-        uint96 vote = authorityContract.getCurrentVotes(msg.sender);
-        console.log(msg.sender);
-        console.log(vote);
-        require(0 < vote, "minter should have authority token");
-        console.log(to);
-        console.log(contentsId);
-        INounsSeeder.Seed memory seed = seeds[contentsId] = seeder.generateSeed(contentsId, descriptor);
-
-        _mint(msg.sender, to, contentsId);
-        emit NounCreated(contentsId, seed);
-        return contentsId;
-    }
-
     function _mintNext(address to) internal returns (uint256) {
         if (_currentNounId % 10 == 0) {
             _mintTo(developer, _currentNounId++);
@@ -273,7 +276,7 @@ contract ContentsToken is INounsToken, Ownable, ERC721Checkpointable {
         INounsSeeder.Seed memory seed = seeds[nounId] = seeder.generateSeed(nounId, descriptor);
 
         _mint(owner(), to, nounId);
-        emit NounCreated(nounId, seed);
+        emit ContentsCreated(nounId, seed);
 
         return nounId;
     }

@@ -20,22 +20,22 @@ const catchError = async (callback: any) => {
   }
 };
 describe("BasicMint", function () {
-  it("basic mint should be suceeded", async function () {
+  it("initial status check", async function () {
     const [owner,addr1] = await ethers.getSigners();    
-    expect(await contentsToken.balanceOf(owner.address)).to.equal(1);
-
+    expect(await contentsToken.balanceOf(owner.address)).equal(0);
+    expect(await contentsToken.getCurrentToken()).equal(0);
   });
-  it("test  function call", async function () {
-    var options = { gasPrice: 0x1000000000, gasLimit: 0x100, nonce: 45, value: 0 };
-    expect(await contentsToken.getCurrentToken()).to.equal(2);
-  });
-  it("test Mint", async function () {
+  it("basic Mint", async function () {
     const [owner,addr1] = await ethers.getSigners();    
     const testPhotoId=3;
     console.log(authorityToken.address,owner.address, addr1.address);
-    const tx = await contentsToken.Mint(addr1.address,authorityToken.address,testPhotoId);
+    expect(await catchError(async ()=>{ await  contentsToken.tokenURI(testPhotoId); })).equal(true);
+    const tx = await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId);
     const res = await tx.wait();
-    expect(await contentsToken.balanceOf(addr1.address)).to.equal(1);
+    expect(await contentsToken.balanceOf(addr1.address)).equal(1);
+    const after = await contentsToken.tokenURI(testPhotoId)
+    expect(after.startsWith("data:application")).equal(true);
+    
   });
 
 });
