@@ -46,7 +46,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
 
     using Strings for uint256;
 
-    // nouns fes committee address.
+    // contents committee address.
     address public committee;
     
     // The Nouns token URI descriptor
@@ -55,11 +55,11 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     // The Nouns token seeder
     INounsSeeder public seeder;
 
-    // The noun seeds
+    // The contents seeds
     mapping(uint256 => INounsSeeder.Seed) public seeds;
 
-    // The internal noun ID tracker
-    uint256 private _currentNounId;
+    // The internal contents ID tracker
+    uint256 private _currentContentsId;
 
     // The previous mint time
     uint256 public mintTime;
@@ -127,7 +127,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * @dev Call _mintTo with the to address(es).
      */
 
-    function mint(address to, address authority, uint256 contentsId) public returns(uint256) {
+    function mint(address to, address authority, string memory contents) public returns(uint256) {
         console.log(authority);
         require(authorityContracts[authority],"wrong authority specified ");
         AuthorityTokenInterface authorityContract = AuthorityTokenInterface(authority);
@@ -136,19 +136,20 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         console.log(vote);
         require(0 < vote, "minter should have authority token");
         console.log(to);
-        console.log(contentsId);
-        INounsSeeder.Seed memory seed = seeds[contentsId] = seeder.generateSeed(contentsId, descriptor);
+        console.log(contents);
+        uint256 id = _currentContentsId++;
+        INounsSeeder.Seed memory seed = seeds[id] = seeder.generateSeed(id, descriptor);
 
-        _mint(msg.sender, to, contentsId);
+        _mint(msg.sender, to, id);
         setMintTime();
-        emit ContentsCreated(contentsId, seed);
-        return contentsId;
+        emit ContentsCreated(id, seed);
+        return id;
     }
          
 
     /*
      * @notice
-     * Buy noun and mint new noun along with a possible developer reward Noun.
+     * Buy contents and mint new contents along with a possible developer reward Noun.
      * Developer reward Nouns are minted every 10 Nouns.
      * @dev Call _mintTo with the to address(es).
      */
@@ -157,7 +158,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         address to = msg.sender;
         uint256 currentPrice = price();
         require(from == address(this), 'Owner is not the contract');
-        require(tokenId == (_currentNounId - 1), 'Not latest Noun');
+        require(tokenId == (_currentContentsId - 1), 'Not latest Noun');
         require(msg.value >= currentPrice, 'Must send at least currentPrice');
 
         prices[tokenId] = msg.value;
@@ -177,7 +178,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * @notice get next tokenId.
      */
     function getCurrentToken() external view returns (uint256) {                  
-        return _currentNounId;
+        return _currentContentsId;
     }
     /*
      * @notice get previous mint time.
@@ -200,26 +201,26 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         return priceSeed.maxPrice - priceDiff;
     }
     /*
-     * @notice anyone can burn a noun after expiration time.
+     * @notice anyone can burn a contents after expiration time.
      */
     function burnExpiredToken() public {
         uint256 timeDiff = block.timestamp - mintTime;
         if (timeDiff > priceSeed.expirationTime) {
-            burn(_currentNounId - 1);
+            burn(_currentContentsId - 1);
         }
         _mintNext(address(this));
     }
     
     /**
-     * @notice Burn a noun.
+     * @notice Burn a contents.
      */
-    function burn(uint256 nounId) public onlyOwner {
-        require(_exists(nounId), 'NounsToken: URI query for nonexistent token');
-        if (_currentNounId - 1 == nounId) {
+    function burn(uint256 contentsId) public onlyOwner {
+        require(_exists(contentsId), 'NounsToken: URI query for nonexistent token');
+        if (_currentContentsId - 1 == contentsId) {
             _mintNext(address(this));
         }
-        _burn(nounId);
-        emit ContentsBurned(nounId);
+        _burn(contentsId);
+        emit ContentsBurned(contentsId);
     }
 
     /**
@@ -238,16 +239,16 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     function dataURI(uint256 tokenId) public view returns (string memory) {
         require(_exists(tokenId), 'NounsToken: URI query for nonexistent token');
 
-        string memory nounId = tokenId.toString();
-        string memory name = string(abi.encodePacked('Noun lover ', nounId));
-        string memory description = string(abi.encodePacked('Noun lover ', nounId, ' is a fun of the Nouns DAO and Nouns Art Festival'));
+        string memory contentsId = tokenId.toString();
+        string memory name = string(abi.encodePacked('Noun lover ', contentsId));
+        string memory description = string(abi.encodePacked('Noun lover ', contentsId, ' is a fun of the Nouns DAO and Nouns Art Festival'));
 
         return descriptor.genericDataURI(name, description, seeds[tokenId]);
         // return descriptor.dataURI(tokenId, seeds[tokenId]);
     }
 
     /**
-     * @notice Set the nouns fes committee.
+     * @notice Set the contentss fes committee.
      * @dev Only callable by the owner.
      */
     function setCommittee(address _committee) external onlyOwner {
@@ -255,7 +256,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     }
 
     /**
-     * @notice Set the nouns fes committee.
+     * @notice Set the contentss fes committee.
      * @dev Only callable by the owner.
      */
     function addAuthority(address _authority) external onlyOwner {
@@ -263,22 +264,22 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     }
 
     function _mintNext(address to) internal returns (uint256) {
-        if (_currentNounId % 10 == 0) {
-            _mintTo(developer, _currentNounId++);
+        if (_currentContentsId % 10 == 0) {
+            _mintTo(developer, _currentContentsId++);
         }
         setMintTime();
-        return _mintTo(to, _currentNounId++);
+        return _mintTo(to, _currentContentsId++);
     }
     /**
-     * @notice Mint a Noun with `nounId` to the provided `to` address.
+     * @notice Mint a Noun with `contentsId` to the provided `to` address.
      */
-    function _mintTo(address to, uint256 nounId) internal returns (uint256) {
-        INounsSeeder.Seed memory seed = seeds[nounId] = seeder.generateSeed(nounId, descriptor);
+    function _mintTo(address to, uint256 contentsId) internal returns (uint256) {
+        INounsSeeder.Seed memory seed = seeds[contentsId] = seeder.generateSeed(contentsId, descriptor);
 
-        _mint(owner(), to, nounId);
-        emit ContentsCreated(nounId, seed);
+        _mint(owner(), to, contentsId);
+        emit ContentsCreated(contentsId, seed);
 
-        return nounId;
+        return contentsId;
     }
 
     /**
