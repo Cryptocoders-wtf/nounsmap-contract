@@ -33,10 +33,11 @@ describe("BasicMint", function () {
     const tx = await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId);
     const rc = await tx.wait();
     const event = rc.events.find((event:any) => event.event === 'ContentsCreated');
-    const [id, seed] = event.args;   
-    console.log(id,seed);     
+    const [id] = event.args;   
+    console.log(id);     
     expect(await contentsToken.balanceOf(addr1.address)).equal(1);
     const after = await contentsToken.tokenURI(0)
+    console.log(after);
     expect(after.startsWith("data:application")).equal(true);
     
   });
@@ -47,10 +48,11 @@ describe("BasicMint", function () {
     const tx = await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId);
     const rc = await tx.wait();
     const event = rc.events.find((event:any) => event.event === 'ContentsCreated');
-    const [id, seed] = event.args;   
-    console.log(id,seed);     
+    const [id] = event.args;   
+    console.log(id);     
     expect(await contentsToken.balanceOf(addr1.address)).equal(2);
     const after = await contentsToken.tokenURI(1)
+    console.log(after);
     expect(after.startsWith("data:application")).equal(true);
     
   });

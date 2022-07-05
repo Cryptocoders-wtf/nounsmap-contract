@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-/// @title The Nouns ERC-721 token
+/// @title The NounsMap contents ERC-721 token
 
 /*********************************
  * ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ *
@@ -16,12 +16,9 @@
  *********************************/
 
 pragma solidity ^0.8.6;
-
+import { Base64 } from 'base64-sol/base64.sol';
 import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
 import { ERC721Checkpointable } from './base/ERC721Checkpointable.sol';
-import { INounsDescriptor } from './interfaces/INounsDescriptor.sol';
-import { INounsSeeder } from './interfaces/INounsSeeder.sol';
-import { INounsToken } from './interfaces/INounsToken.sol';
 import { ERC721 } from './base/ERC721.sol';
 import { IERC721 } from '@openzeppelin/contracts/token/ERC721/IERC721.sol';
 import { IProxyRegistry } from './external/opensea/IProxyRegistry.sol';
@@ -36,7 +33,7 @@ abstract contract AuthorityTokenInterface {
 
 contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
 
-    event ContentsCreated(uint256 indexed tokenId, INounsSeeder.Seed seed);
+    event ContentsCreated(uint256 indexed tokenId);
 
     event ContentsBurned(uint256 indexed tokenId);
 
@@ -49,14 +46,12 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     // contents committee address.
     address public committee;
     
-    // The Nouns token URI descriptor
-    INounsDescriptor public descriptor;
+    // The contents contents
+    mapping(uint256 => string) internal tokenContents;
 
-    // The Nouns token seeder
-    INounsSeeder public seeder;
+    // The contents store site
+    string public web2Url;
 
-    // The contents seeds
-    mapping(uint256 => INounsSeeder.Seed) public seeds;
 
     // The internal contents ID tracker
     uint256 private _currentContentsId;
@@ -90,15 +85,11 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     IProxyRegistry public immutable proxyRegistry;
 
     constructor(
-        INounsDescriptor _descriptor,
-        INounsSeeder _seeder,
         address _developer,
         address _committee,
         PriceSeed memory _priceSeed,
         IProxyRegistry _proxyRegistry
     ) ERC721('NounsMapContents', 'NMC') {
-        descriptor = _descriptor;
-        seeder = _seeder;
         developer = _developer;
         committee = _committee;
         proxyRegistry = _proxyRegistry;
@@ -127,7 +118,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * @dev Call _mintTo with the to address(es).
      */
 
-    function mint(address to, address authority, string memory contents) public returns(uint256) {
+    function mint(address to, address authority, string calldata contents) public returns(uint256) {
         console.log(authority);
         require(authorityContracts[authority],"wrong authority specified ");
         AuthorityTokenInterface authorityContract = AuthorityTokenInterface(authority);
@@ -138,19 +129,17 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         console.log(to);
         console.log(contents);
         uint256 id = _currentContentsId++;
-        INounsSeeder.Seed memory seed = seeds[id] = seeder.generateSeed(id, descriptor);
-
+        tokenContents[id] = contents;
         _mint(msg.sender, to, id);
         setMintTime();
-        emit ContentsCreated(id, seed);
+        emit ContentsCreated(id);
         return id;
     }
          
 
     /*
      * @notice
-     * Buy contents and mint new contents along with a possible developer reward Noun.
-     * Developer reward Nouns are minted every 10 Nouns.
+     * Buy contents and mint new contents.
      * @dev Call _mintTo with the to address(es).
      */
     function buy(uint256 tokenId) external payable returns (uint256) {
@@ -215,7 +204,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * @notice Burn a contents.
      */
     function burn(uint256 contentsId) public onlyOwner {
-        require(_exists(contentsId), 'NounsToken: URI query for nonexistent token');
+        require(_exists(contentsId), 'ContentsToken: URI query for nonexistent token');
         if (_currentContentsId - 1 == contentsId) {
             _mintNext(address(this));
         }
@@ -228,7 +217,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * @dev See {IERC721Metadata-tokenURI}.
      */
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        require(_exists(tokenId), 'NounsToken: URI query for nonexistent token');
+        require(_exists(tokenId), 'ContentsToken: URI query for nonexistent token');
         return dataURI(tokenId);
     }
 
@@ -237,14 +226,20 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * with the JSON contents directly inlined.
      */
     function dataURI(uint256 tokenId) public view returns (string memory) {
-        require(_exists(tokenId), 'NounsToken: URI query for nonexistent token');
+        require(_exists(tokenId), 'ContentsToken: URI query for nonexistent token');
 
         string memory contentsId = tokenId.toString();
-        string memory name = string(abi.encodePacked('Noun lover ', contentsId));
-        string memory description = string(abi.encodePacked('Noun lover ', contentsId, ' is a fun of the Nouns DAO and Nouns Art Festival'));
-
-        return descriptor.genericDataURI(name, description, seeds[tokenId]);
-        // return descriptor.dataURI(tokenId, seeds[tokenId]);
+        string memory name = string(abi.encodePacked('NounsMap ', contentsId));
+        string memory description = string(abi.encodePacked('NounsMap ', contentsId, ' is a map with photo and movie.'));
+        string memory url = string(abi.encodePacked(web2Url,tokenId.toString()));
+        return  string(abi.encodePacked(
+            'data:application/json;base64,',
+            Base64.encode(
+                bytes(
+                    abi.encodePacked('{"name":"', name, '", "description":"', description, '", "image": "', url, '"}')
+                )
+            )
+        ));
     }
 
     /**
@@ -254,6 +249,14 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     function setCommittee(address _committee) external onlyOwner {
         committee = _committee;
     }
+
+    /**
+     * @notice Set the contentss fes committee.
+     * @dev Only callable by the owner.
+     */
+    function setWeb2(string calldata _url) external onlyOwner {
+        web2Url = _url;
+    }    
 
     /**
      * @notice Set the contentss fes committee.
@@ -274,10 +277,8 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * @notice Mint a Noun with `contentsId` to the provided `to` address.
      */
     function _mintTo(address to, uint256 contentsId) internal returns (uint256) {
-        INounsSeeder.Seed memory seed = seeds[contentsId] = seeder.generateSeed(contentsId, descriptor);
-
         _mint(owner(), to, contentsId);
-        emit ContentsCreated(contentsId, seed);
+        emit ContentsCreated(contentsId);
 
         return contentsId;
     }
@@ -314,7 +315,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * @notice Get the price of token.
      */
     function tokenPrice(uint256 tokenId) public view returns (uint256) {
-        require(_exists(tokenId), 'NounsToken: URI query for nonexistent token');
+        require(_exists(tokenId), 'ContentsToken: URI query for nonexistent token');
         return prices[tokenId];
     }
     
