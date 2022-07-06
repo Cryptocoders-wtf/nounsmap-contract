@@ -50,11 +50,18 @@ describe("BasicMint", function () {
     const event = rc.events.find((event:any) => event.event === 'ContentsCreated');
     const [id] = event.args;   
     console.log(id);     
-    expect(await contentsToken.balanceOf(addr1.address)).equal(2);
+    expect(await contentsToken.balanceOf(addr1.address)).to.equal(2);
     const after = await contentsToken.tokenURI(1)
     console.log(after);
-    expect(after.startsWith("data:application")).equal(true);
+    expect(after.startsWith("data:application")).to.equal(true);
     
+  });
+  it("tokenURL confirm", async function () {
+    const [owner,addr1] = await ethers.getSigners();    
+    const testPhotoId="6oHFJbRhdqBpCseSVNOk";
+    const after = await contentsToken.tokenURI(0)
+    const resJson = JSON.parse(Buffer.from(after.substr('data:application/json;base64,'.length) , "base64").toString());
+    expect(resJson.image).to.equal("https://dev.nounsmap.com/p/" + testPhotoId);
   });
 
 });

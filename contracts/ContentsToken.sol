@@ -231,7 +231,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         string memory contentsId = tokenId.toString();
         string memory name = string(abi.encodePacked('NounsMap ', contentsId));
         string memory description = string(abi.encodePacked('NounsMap ', contentsId, ' is a map with photo and movie.'));
-        string memory url = string(abi.encodePacked(web2Url,tokenId.toString()));
+        string memory url = string(abi.encodePacked(web2Url,tokenContents[tokenId]));
         return  string(abi.encodePacked(
             'data:application/json;base64,',
             Base64.encode(
