@@ -1,11 +1,11 @@
 import { ethers, network } from "hardhat";
 
 export const developer = "0x3e7311e0Fc89fA633433076be268ae007A1b827a"; 
-export const committee = "0x3e7311e0Fc89fA633433076be268ae007A1b827a"; 
+export const committee = "0x4E4cD175f812f1Ba784a69C1f8AC8dAa52AD7e2B";
 
-const proxy = (network.name == "rinkeby") ?
-    "0xf57b2c51ded3a29e6891aba85459d600256cf317":
-    "0xa5409ec958c83c3f309868babaca7c86dcb077c1"; // openSea proxy
+const proxy = (network.name == "mainnet") ?
+  "0xa5409ec958c83c3f309868babaca7c86dcb077c1": // openSea proxy
+  "0xf57b2c51ded3a29e6891aba85459d600256cf317";
 
 
 // 1 eth = 10**18
@@ -20,8 +20,9 @@ export const deploy:any = async (setWhitelist = true) => {
   let i =0
   console.log(i++);
   const contentsTokenFactory = await ethers.getContractFactory("ContentsToken");
-  const contentsToken = await contentsTokenFactory.deploy(developer,committee,priceSeed,proxy);
+  const contentsToken = await contentsTokenFactory.deploy(committee,priceSeed,proxy);
   await contentsToken.deployed();
+  console.log(contentsToken.address,contentsToken.signer.getAddress());
 
   console.log(i++);
   const nounsTokenFactory = await ethers.getContractFactory("NounsToken");
@@ -29,14 +30,29 @@ export const deploy:any = async (setWhitelist = true) => {
 
   let authorityToken;
   if((network.name == "hardhat")){
-    const descriptor = "0x0cfdb3ba1694c2bb2cfacb0339ad7b1ae5932b63";
-    const seeder = "0xcc8a0fb5ab3c7132c1b2a0109142fb112c4ce515";    
-    const proxy = "0xa5409ec958c83c3f309868babaca7c86dcb077c1"; // openSea proxy
+    //const descriptor = "0x0cfdb3ba1694c2bb2cfacb0339ad7b1ae5932b63";
+    //const seeder = "0xcc8a0fb5ab3c7132c1b2a0109142fb112c4ce515";    
+    //const proxy = "0xa5409ec958c83c3f309868babaca7c86dcb077c1"; // openSea proxy
+    const descriptor = "0x292c84894c1B86140A784eec99711d6007005f21";
+    const seeder = "0x5bcc91c44bffa15c9b804a5fd30174e8da296a4b";
+    const proxy = "0xf57b2c51ded3a29e6891aba85459d600256cf317";    
+
     authorityToken = await nounsTokenFactory.deploy(descriptor,seeder,developer,committee,priceSeed,proxy,{gasLimit: 9000000});
     console.log(i++);
     await authorityToken.deployed();  
     console.log(i++);
     await contentsToken.addAuthority(authorityToken.address);
+    const nounsToken = "0x1602155eB091F863e7e776a83e1c330c828ede19"; //NounsLove    
+    /*
+    const NounsToken = await ethers.getContractFactory("NounsToken");
+    console.log(i++);
+    const authContract = NounsToken.attach(nounsToken);    
+    const token = await authContract.getCurrentToken();
+    console.log(i++,token.toNumber());
+    await authContract.buy(token.toNumber(),{value:0.1});
+    console.log(i++);
+    */
+    await contentsToken.addAuthority(nounsToken);
   } 
   console.log(i++);
   if((network.name == "rinkeby")){

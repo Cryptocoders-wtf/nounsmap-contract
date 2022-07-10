@@ -89,4 +89,13 @@ describe("BasicMint", function () {
     expect(attr.name).to.equal("testContents");
   });
 
+  it("setAdmin", async function () {
+    const [owner,addr1] = await ethers.getSigners();    
+    expect(await catchError(async ()=>{ await  contentsToken.connect(addr1).setWeb2("https://hoge.com"); })).equal(true);
+    await contentsToken.setAdmin(addr1.address);
+    await contentsToken.connect(addr1).setWeb2("https://hoge.com");
+    const url = await contentsToken.web2Url();
+    expect(url).to.equal("https://hoge.com");
+  });
+
 });
