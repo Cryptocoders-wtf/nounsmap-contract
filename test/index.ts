@@ -4,6 +4,21 @@ import { deploy, developer } from "../utils/deploy";
 
 let authorityToken :any = null;
 let contentsToken :any = null;
+
+const assetBase:any = {
+  group: "photo",
+  category: "news",
+  tag: "",
+  width: 512, height: 512,
+  minter: ""
+};
+
+const asset = Object.assign({}, assetBase);
+asset.name = "testContents";
+asset.metadata = new Uint8Array();
+asset.description = "this is test contents";
+
+
 before(async () => {
   const result = await deploy(false);
   contentsToken = result.contentsToken;
@@ -30,12 +45,16 @@ describe("BasicMint", function () {
     const testPhotoId="6oHFJbRhdqBpCseSVNOk";
     console.log(authorityToken.address,owner.address, addr1.address);
     expect(await catchError(async ()=>{ await  contentsToken.tokenURI(0); })).equal(true);
-    const tx = await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId);
+    asset.soulbound = owner.address;
+    console.log("11");
+    const tx = await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId,asset);
     const rc = await tx.wait();
+    console.log("12");
     const event = rc.events.find((event:any) => event.event === 'ContentsCreated');
     const [id] = event.args;   
     console.log(id);     
     expect(await contentsToken.balanceOf(addr1.address)).equal(1);
+    console.log("13");
     const after = await contentsToken.tokenURI(0)
     console.log(after);
     expect(after.startsWith("data:application")).equal(true);
@@ -45,7 +64,7 @@ describe("BasicMint", function () {
     const [owner,addr1] = await ethers.getSigners();    
     const testPhotoId="7efUr8hbGVQTpWDXXGLV";
     console.log(authorityToken.address,owner.address, addr1.address);
-    const tx = await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId);
+    const tx = await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId,asset);
     const rc = await tx.wait();
     const event = rc.events.find((event:any) => event.event === 'ContentsCreated');
     const [id] = event.args;   
@@ -62,6 +81,12 @@ describe("BasicMint", function () {
     const after = await contentsToken.tokenURI(0)
     const resJson = JSON.parse(Buffer.from(after.substr('data:application/json;base64,'.length) , "base64").toString());
     expect(resJson.image).to.equal("https://dev.nounsmap.com/p/" + testPhotoId);
+  });
+
+  it("AssetAttribute confirm", async function () {
+    const [owner,addr1] = await ethers.getSigners();    
+    const attr = await contentsToken.getAttributes(0)
+    expect(attr.name).to.equal("testContents");
   });
 
 });

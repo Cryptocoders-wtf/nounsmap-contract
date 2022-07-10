@@ -31,9 +31,22 @@ abstract contract AuthorityTokenInterface {
  // function getPriorVotes(address account, uint256 blockNumber) public virtual view returns (uint96);
 }
 
+struct ContentsAttributes{
+    string group;
+    string category;
+    string name;
+    string tag; 
+    string minter; // the name of the minter (who paid the gas fee)
+    address soulbound; // wallet address of the minter
+    uint16 width;
+    uint16 height;    
+    bytes metadata; // group/category specific metadata
+    string description;
+}
+
 contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
 
-    event ContentsCreated(uint256 indexed tokenId);
+    event ContentsCreated(uint256 indexed tokenId, string contents);
 
     event ContentsBurned(uint256 indexed tokenId);
 
@@ -46,8 +59,19 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     // contents committee address.
     address public committee;
     
-    // The contents contents
+    // The tokenId to contentsId
     mapping(uint256 => string) internal tokenContents;
+    function getContents(uint256 tokenId) external view returns(string memory){
+        require(_exists(tokenId), 'ContentsToken: tokenId  nonexistent token');
+        return tokenContents[tokenId];
+    }
+
+    // The tokenId to Attribute
+    mapping(uint256 => ContentsAttributes) internal tokenAttributes;
+    function getAttributes(uint256 tokenId) external view returns(ContentsAttributes memory){
+        require(_exists(tokenId), 'ContentsToken: tokenId  nonexistent token');
+        return tokenAttributes[tokenId];
+    }
 
     // The contents store site
     string public web2Url;
@@ -73,7 +97,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
 
     // developer address.
     address public developer;
-    
+
     // Mapping from token ID to price
     mapping(uint256 => uint256) private prices;
 
@@ -118,7 +142,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * @dev Call _mintTo with the to address(es).
      */
 
-    function mint(address to, address authority, string calldata contents) public returns(uint256) {
+    function mint(address to, address authority, string calldata contents, ContentsAttributes calldata attr) public returns(uint256) {
         console.log(authority);
         require(authorityContracts[authority],"wrong authority specified ");
         AuthorityTokenInterface authorityContract = AuthorityTokenInterface(authority);
@@ -130,9 +154,10 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         console.log(contents);
         uint256 id = _currentContentsId++;
         tokenContents[id] = contents;
+        tokenAttributes[id] = attr;
         _mint(msg.sender, to, id);
         setMintTime();
-        emit ContentsCreated(id);
+        emit ContentsCreated(id,contents);
         return id;
     }
          
@@ -142,7 +167,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * Buy contents and mint new contents.
      * @dev Call _mintTo with the to address(es).
      */
-    function buy(uint256 tokenId) external payable returns (uint256) {
+    function buy(uint256 tokenId) external payable returns (bool) {
         address from = ownerOf(tokenId);
         address to = msg.sender;
         uint256 currentPrice = price();
@@ -154,7 +179,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         buyTransfer(to, tokenId);
         
         emit ContentsBought(tokenId, to);
-        return _mintNext(address(this));
+        return true;
     }
     /*
      * @notice set previous mint time.
@@ -189,25 +214,12 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         }
         return priceSeed.maxPrice - priceDiff;
     }
-    /*
-     * @notice anyone can burn a contents after expiration time.
-     */
-    function burnExpiredToken() public {
-        uint256 timeDiff = block.timestamp - mintTime;
-        if (timeDiff > priceSeed.expirationTime) {
-            burn(_currentContentsId - 1);
-        }
-        _mintNext(address(this));
-    }
-    
+
     /**
      * @notice Burn a contents.
      */
     function burn(uint256 contentsId) public onlyOwner {
         require(_exists(contentsId), 'ContentsToken: URI query for nonexistent token');
-        if (_currentContentsId - 1 == contentsId) {
-            _mintNext(address(this));
-        }
         _burn(contentsId);
         emit ContentsBurned(contentsId);
     }
@@ -264,23 +276,6 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      */
     function addAuthority(address _authority) external onlyOwner {
         authorityContracts[_authority] = true;
-    }
-
-    function _mintNext(address to) internal returns (uint256) {
-        if (_currentContentsId % 10 == 0) {
-            _mintTo(developer, _currentContentsId++);
-        }
-        setMintTime();
-        return _mintTo(to, _currentContentsId++);
-    }
-    /**
-     * @notice Mint a Noun with `contentsId` to the provided `to` address.
-     */
-    function _mintTo(address to, uint256 contentsId) internal returns (uint256) {
-        _mint(owner(), to, contentsId);
-        emit ContentsCreated(contentsId);
-
-        return contentsId;
     }
 
     /**

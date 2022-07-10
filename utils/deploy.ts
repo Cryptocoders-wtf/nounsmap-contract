@@ -35,8 +35,6 @@ export const deploy:any = async (setWhitelist = true) => {
     authorityToken = await nounsTokenFactory.deploy(descriptor,seeder,developer,committee,priceSeed,proxy,{gasLimit: 9000000});
     console.log(i++);
     await authorityToken.deployed();  
-  await authorityToken.deployed();
-    await authorityToken.deployed();  
     console.log(i++);
     await contentsToken.addAuthority(authorityToken.address);
   } 
