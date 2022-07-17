@@ -18,6 +18,8 @@ asset.name = "testContents";
 asset.metadata = new Uint8Array();
 asset.description = "this is test contents";
 
+const testPhotoId="6oHFJbRhdqBpCseSVNOk";
+const testPhotoId2="7efUr8hbGVQTpWDXXGLV";
 
 before(async () => {
   const result = await deploy(false);
@@ -38,14 +40,14 @@ describe("BasicMint", function () {
   it("initial status check", async function () {
     const [owner,addr1] = await ethers.getSigners();    
     expect(await contentsToken.balanceOf(owner.address)).equal(0);
-    expect(await contentsToken.getCurrentToken()).equal(0);
+    expect(await contentsToken.getCurrentToken()).equal(1);
   });
   it("1st Mint", async function () {
     const [owner,addr1] = await ethers.getSigners();    
-    const testPhotoId="6oHFJbRhdqBpCseSVNOk";
     console.log(authorityToken.address,owner.address, addr1.address);
-    expect(await catchError(async ()=>{ await  contentsToken.tokenURI(0); })).equal(true);
-    asset.soulbound = owner.address;
+    expect(await catchError(async ()=>{ await  contentsToken.tokenURI(1); })).equal(true);
+    asset.soulbound = owner.address; 
+    asset.creator = addr1.address; 
     console.log("11");
     const tx = await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId,asset);
     const rc = await tx.wait();
@@ -53,39 +55,55 @@ describe("BasicMint", function () {
     const event = rc.events.find((event:any) => event.event === 'ContentsCreated');
     const [id] = event.args;   
     console.log(id);     
-    expect(await contentsToken.balanceOf(addr1.address)).equal(1);
-    console.log("13");
-    const after = await contentsToken.tokenURI(0)
+  });
+  it("1st Mint result balancce", async function () {
+    const [owner,addr1] = await ethers.getSigners();    
+      expect(await contentsToken.balanceOf(addr1.address)).equal(1);
+  });
+  it("1st Mint result tokenURI", async function () {
+    const after = await contentsToken.tokenURI(1)
     console.log(after);
     expect(after.startsWith("data:application")).equal(true);
-    
+  });
+  it("1st Mint result getTokenId", async function () {
+    const tokenID = await contentsToken.getTokenId(testPhotoId);
+    expect(tokenID).equals(1);
+  });
+  it("1st Mint result getAttrSoulbound", async function () {
+    const [owner,addr1] = await ethers.getSigners();    
+    const ret = await contentsToken.getAttributes(1);
+    console.log(ret);
+    expect(ret.soulbound).equals(owner.address);
+    expect(ret.creator).equals(addr1.address);
   });
   it("2nd Mint", async function () {
     const [owner,addr1] = await ethers.getSigners();    
-    const testPhotoId="7efUr8hbGVQTpWDXXGLV";
     console.log(authorityToken.address,owner.address, addr1.address);
-    const tx = await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId,asset);
+    const tx = await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId2,asset);
     const rc = await tx.wait();
     const event = rc.events.find((event:any) => event.event === 'ContentsCreated');
     const [id] = event.args;   
     console.log(id);     
     expect(await contentsToken.balanceOf(addr1.address)).to.equal(2);
-    const after = await contentsToken.tokenURI(1)
-    console.log(after);
-    expect(after.startsWith("data:application")).to.equal(true);
-    
   });
+
+  it("same ContentsID mint should fail", async function () {
+    const [owner,addr1] = await ethers.getSigners();    
+    console.log(authorityToken.address,owner.address, addr1.address);
+    expect(await catchError(async ()=>{ await contentsToken.mint(addr1.address,authorityToken.address,testPhotoId2,asset) })).equal(true);
+    expect(await contentsToken.balanceOf(addr1.address)).to.equal(2);
+  });
+
   it("tokenURL confirm", async function () {
     const [owner,addr1] = await ethers.getSigners();    
-    const testPhotoId="6oHFJbRhdqBpCseSVNOk";
-    const after = await contentsToken.tokenURI(0)
+    const after = await contentsToken.tokenURI(1)
     const resJson = JSON.parse(Buffer.from(after.substr('data:application/json;base64,'.length) , "base64").toString());
     expect(resJson.image).to.equal("https://dev.nounsmap.com/p/" + testPhotoId);
   });
 
   it("AssetAttribute confirm", async function () {
     const [owner,addr1] = await ethers.getSigners();    
-    const attr = await contentsToken.getAttributes(0)
+    const attr = await contentsToken.getAttributes(1)
     expect(attr.name).to.equal("testContents");
   });
 

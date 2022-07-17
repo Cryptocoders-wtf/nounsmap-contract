@@ -56,14 +56,6 @@ export const deploy:any = async (setWhitelist = true) => {
   } 
   console.log(i++);
   if((network.name == "rinkeby")){
-    const descriptor = "0x292c84894c1B86140A784eec99711d6007005f21";
-    const seeder = "0x5bcc91c44bffa15c9b804a5fd30174e8da296a4b";
-    const proxy = "0xf57b2c51ded3a29e6891aba85459d600256cf317";    
-    authorityToken = await nounsTokenFactory.deploy(descriptor,seeder,developer,committee,priceSeed,proxy,{gasLimit: 9000000});
-    console.log(i++);
-    await authorityToken.deployed();  
-    console.log(i++);
-    await contentsToken.addAuthority(authorityToken.address);
     const nounsToken = "0x1602155eB091F863e7e776a83e1c330c828ede19"; //NounsLove    
     await contentsToken.addAuthority(nounsToken);
   }
@@ -74,6 +66,6 @@ export const deploy:any = async (setWhitelist = true) => {
     await contentsToken.addAuthority(nounsToken);
   }
   console.log(i++);
-  contentsToken.setWeb2("https://dev.nounsmap.com/p/");
+  contentsToken.setWeb2("https://dev.nounsmap.com/contents/");
   return { contentsToken, authorityToken };
 };
