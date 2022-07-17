@@ -31,9 +31,22 @@ abstract contract AuthorityTokenInterface {
  // function getPriorVotes(address account, uint256 blockNumber) public virtual view returns (uint96);
 }
 
+struct ContentsAttributes{
+    string group;
+    string category;
+    string name;
+    string tag; 
+    string minter; // the name of the minter (who paid the gas fee)
+    address soulbound; // wallet address of the minter
+    uint16 width;
+    uint16 height;    
+    bytes metadata; // group/category specific metadata
+    string description;
+}
+
 contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
 
-    event ContentsCreated(uint256 indexed tokenId);
+    event ContentsCreated(uint256 indexed tokenId, string contents);
 
     event ContentsBurned(uint256 indexed tokenId);
 
@@ -45,9 +58,20 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
 
     // contents committee address.
     address public committee;
-    
-    // The contents contents
+
+    // The tokenId to contentsId
     mapping(uint256 => string) internal tokenContents;
+    function getContents(uint256 tokenId) external view returns(string memory){
+        require(_exists(tokenId), 'ContentsToken: nonexistent token');
+        return tokenContents[tokenId];
+    }
+
+    // The tokenId to Attribute
+    mapping(uint256 => ContentsAttributes) internal tokenAttributes;
+    function getAttributes(uint256 tokenId) external view returns(ContentsAttributes memory){
+        require(_exists(tokenId), 'ContentsToken: nonexistent token');
+        return tokenAttributes[tokenId];
+    }
 
     // The contents store site
     string public web2Url;
@@ -56,8 +80,8 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     // The internal contents ID tracker
     uint256 private _currentContentsId;
 
-    // The previous mint time
-    uint256 public mintTime;
+    // The token mintTimes
+    mapping(uint256 => uint256) internal mintTimes;
     
     // Seed data to calculate price
     struct PriceSeed {
@@ -71,9 +95,15 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     // price seed
     PriceSeed public priceSeed;
 
-    // developer address.
-    address public developer;
-    
+    // Upgradable admin (only by owner)
+    address public admin;
+    modifier onlyAdmin() {
+        require(owner() == _msgSender() || admin == _msgSender(), "ContentsToken: caller is not the admin");
+        _;
+    }    
+    function setAdmin(address _admin) external onlyOwner {
+        admin = _admin;
+    }  
     // Mapping from token ID to price
     mapping(uint256 => uint256) private prices;
 
@@ -85,12 +115,11 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     IProxyRegistry public immutable proxyRegistry;
 
     constructor(
-        address _developer,
         address _committee,
         PriceSeed memory _priceSeed,
         IProxyRegistry _proxyRegistry
     ) ERC721('NounsMapContents', 'NMC') {
-        developer = _developer;
+        admin = owner();
         committee = _committee;
         proxyRegistry = _proxyRegistry;
 
@@ -118,7 +147,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * @dev Call _mintTo with the to address(es).
      */
 
-    function mint(address to, address authority, string calldata contents) public returns(uint256) {
+    function mint(address to, address authority, string calldata contents, ContentsAttributes calldata attr) public returns(uint256) {
         console.log(authority);
         require(authorityContracts[authority],"wrong authority specified ");
         AuthorityTokenInterface authorityContract = AuthorityTokenInterface(authority);
@@ -130,9 +159,10 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         console.log(contents);
         uint256 id = _currentContentsId++;
         tokenContents[id] = contents;
+        tokenAttributes[id] = attr;
         _mint(msg.sender, to, id);
-        setMintTime();
-        emit ContentsCreated(id);
+        setMintTime(id);
+        emit ContentsCreated(id,contents);
         return id;
     }
          
@@ -142,26 +172,18 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * Buy contents and mint new contents.
      * @dev Call _mintTo with the to address(es).
      */
-    function buy(uint256 tokenId) external payable returns (uint256) {
+    function buy(uint256 tokenId) external payable returns (bool) {
         address from = ownerOf(tokenId);
         address to = msg.sender;
-        uint256 currentPrice = price();
+        uint256 currentPrice = price(tokenId);
         require(from == address(this), 'Owner is not the contract');
-        require(tokenId == (_currentContentsId - 1), 'Not latest Noun');
         require(msg.value >= currentPrice, 'Must send at least currentPrice');
 
         prices[tokenId] = msg.value;
         buyTransfer(to, tokenId);
         
         emit ContentsBought(tokenId, to);
-        return _mintNext(address(this));
-    }
-    /*
-     * @notice set previous mint time.
-     */
-    function setMintTime() private {
-        mintTime = block.timestamp;
-        emit MintTimeUpdated(mintTime);
+        return true;
     }
     /*
      * @notice get next tokenId.
@@ -170,16 +192,25 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         return _currentContentsId;
     }
     /*
+     * @notice set previous mint time.
+     */
+    function setMintTime(uint256 tokenId) private {
+        require(_exists(tokenId), 'ContentsToken: nonexistent token');
+        mintTimes[tokenId] = block.timestamp;
+        emit MintTimeUpdated(mintTimes[tokenId]);
+    }
+    /*
      * @notice get previous mint time.
      */
-    function getMintTime() external view returns (uint256) {                  
-        return mintTime;
+    function getMintTime(uint256 tokenId) external view returns (uint256) {                  
+        require(_exists(tokenId), 'ContentsToken: nonexistent token');
+        return mintTimes[tokenId];
     }
     /*
      * @notice maxPrice - (time diff / time step) * price step
      */
-    function price() private view returns (uint256) {
-        uint256 timeDiff = block.timestamp - mintTime;
+    function price(uint256 tokenId) private view returns (uint256) {
+        uint256 timeDiff = block.timestamp - mintTimes[tokenId];
         if (timeDiff < priceSeed.timeDelta ) {
             return priceSeed.maxPrice;
         }
@@ -189,25 +220,12 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         }
         return priceSeed.maxPrice - priceDiff;
     }
-    /*
-     * @notice anyone can burn a contents after expiration time.
-     */
-    function burnExpiredToken() public {
-        uint256 timeDiff = block.timestamp - mintTime;
-        if (timeDiff > priceSeed.expirationTime) {
-            burn(_currentContentsId - 1);
-        }
-        _mintNext(address(this));
-    }
-    
+
     /**
      * @notice Burn a contents.
      */
-    function burn(uint256 contentsId) public onlyOwner {
-        require(_exists(contentsId), 'ContentsToken: URI query for nonexistent token');
-        if (_currentContentsId - 1 == contentsId) {
-            _mintNext(address(this));
-        }
+    function burn(uint256 contentsId) public onlyAdmin {
+        require(_exists(contentsId), 'ContentsToken: nonexistent token');
         _burn(contentsId);
         emit ContentsBurned(contentsId);
     }
@@ -231,7 +249,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         string memory contentsId = tokenId.toString();
         string memory name = string(abi.encodePacked('NounsMap ', contentsId));
         string memory description = string(abi.encodePacked('NounsMap ', contentsId, ' is a map with photo and movie.'));
-        string memory url = string(abi.encodePacked(web2Url,tokenId.toString()));
+        string memory url = string(abi.encodePacked(web2Url,tokenContents[tokenId]));
         return  string(abi.encodePacked(
             'data:application/json;base64,',
             Base64.encode(
@@ -244,59 +262,42 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
 
     /**
      * @notice Set the contentss fes committee.
-     * @dev Only callable by the owner.
+     * @dev Only callable by the admin.
      */
-    function setCommittee(address _committee) external onlyOwner {
+    function setCommittee(address _committee) external onlyAdmin {
         committee = _committee;
     }
 
     /**
      * @notice Set the contentss fes committee.
-     * @dev Only callable by the owner.
+     * @dev Only callable by the admin.
      */
-    function setWeb2(string calldata _url) external onlyOwner {
+    function setWeb2(string calldata _url) external onlyAdmin {
         web2Url = _url;
     }    
 
     /**
      * @notice Set the contentss fes committee.
-     * @dev Only callable by the owner.
+     * @dev Only callable by the admin.
      */
-    function addAuthority(address _authority) external onlyOwner {
+    function addAuthority(address _authority) external onlyAdmin {
         authorityContracts[_authority] = true;
-    }
-
-    function _mintNext(address to) internal returns (uint256) {
-        if (_currentContentsId % 10 == 0) {
-            _mintTo(developer, _currentContentsId++);
-        }
-        setMintTime();
-        return _mintTo(to, _currentContentsId++);
-    }
-    /**
-     * @notice Mint a Noun with `contentsId` to the provided `to` address.
-     */
-    function _mintTo(address to, uint256 contentsId) internal returns (uint256) {
-        _mint(owner(), to, contentsId);
-        emit ContentsCreated(contentsId);
-
-        return contentsId;
     }
 
     /**
      * @notice Transfer eth to committee.
-     * @dev Only callable by the Owner.
+     * @dev Only callable by the admin.
      */
-    function transfer() external onlyOwner {
+    function transfer() external onlyAdmin {
         address payable payableTo = payable(committee);
         payableTo.transfer(address(this).balance);
     }
 
     /**
      * @notice Set Price Data.
-     * @dev Only callable by the Owner.
+     * @dev Only callable by the admin.
      */
-    function setPriceData(PriceSeed memory _priceSeed) external onlyOwner {
+    function setPriceData(PriceSeed memory _priceSeed) external onlyAdmin {
         require(_priceSeed.maxPrice > _priceSeed.minPrice, 'Max price must be larger than Min Price');
         priceSeed.maxPrice = _priceSeed.maxPrice;
         priceSeed.minPrice = _priceSeed.minPrice;
@@ -315,16 +316,9 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      * @notice Get the price of token.
      */
     function tokenPrice(uint256 tokenId) public view returns (uint256) {
-        require(_exists(tokenId), 'ContentsToken: URI query for nonexistent token');
+        require(_exists(tokenId), 'ContentsToken: nonexistent token');
         return prices[tokenId];
     }
     
-    /**
-     * @notice Set developer.
-     * @dev Only callable by the Owner.
-     */
-    function setDeveloper(address _developer) external onlyOwner {
-        developer = _developer;
-    }
 
 }

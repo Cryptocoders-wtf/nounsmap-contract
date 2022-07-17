@@ -41,13 +41,13 @@ async function main() {
   };
   
   // We get the contract to deploy
-  const NounsToken = await ethers.getContractFactory("NounsToken");
-  const nounsToken = await NounsToken.deploy(descriptor, seeder, developer, committee, priceSeed, proxy);
+  const Factory = await ethers.getContractFactory("ContentsToken");
+  const contentsToken = await Factory.deploy(committee, priceSeed, proxy);
 
-  await nounsToken.deployed();
+  await contentsToken.deployed();
 
   
-  console.log("nounsToken deployed to:", nounsToken.address);
+  console.log("nounsToken deployed to:", contentsToken.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
