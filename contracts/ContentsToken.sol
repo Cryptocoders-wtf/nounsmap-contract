@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
 
 /// @title The NounsMap contents ERC-721 token
+/// https://dev.nounsmap.com/nft/
+/// If you have a AuthorityToken you can mint  new contents from others.abi
+/// NounsMap photos will be available for sale on market place.
+/// For example, by distributing photos posted by people who have been affected by wars or disasters, 
+/// we can directly support those who have been affected by the disaster. 
+/// Please cooperate in NFT conversion of photos that you would like to support by carefully looking at the contents and explanations of the photos.",
+
 
 /*********************************
  * ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ *
@@ -37,7 +44,8 @@ struct ContentsAttributes{
     string name;
     string tag; 
     string minter; // the name of the minter (who paid the gas fee)
-    address soulbound; // wallet address of the minter
+    address soulbound; // wallet address of minter
+    address creator; // wallet address of the photo original creator
     uint16 width;
     uint16 height;    
     bytes metadata; // group/category specific metadata
@@ -66,6 +74,15 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         return tokenContents[tokenId];
     }
 
+    // The contentsId to tokenId
+    mapping(string => uint256) internal contentsTokens;
+    function getTokenId(string calldata contentsId) external view returns(uint256){
+        require(contentsTokens[contentsId] != 0, "contents id should exist ");
+        uint256 tokenId = contentsTokens[contentsId];
+        require(_exists(tokenId), 'ContentsToken: nonexistent token');
+        return tokenId;
+    }
+
     // The tokenId to Attribute
     mapping(uint256 => ContentsAttributes) internal tokenAttributes;
     function getAttributes(uint256 tokenId) external view returns(ContentsAttributes memory){
@@ -76,9 +93,8 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     // The contents store site
     string public web2Url;
 
-
     // The internal contents ID tracker
-    uint256 private _currentContentsId;
+    uint256 private _currentContentsId = 1;
 
     // The token mintTimes
     mapping(uint256 => uint256) internal mintTimes;
@@ -110,7 +126,6 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     // Mapping from contractID to bool
     mapping(address => bool) private authorityContracts;
 
-    
     // OpenSea's Proxy Registry
     IProxyRegistry public immutable proxyRegistry;
 
@@ -150,6 +165,9 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
     function mint(address to, address authority, string calldata contents, ContentsAttributes calldata attr) public returns(uint256) {
         console.log(authority);
         require(authorityContracts[authority],"wrong authority specified ");
+        require(contentsTokens[contents] == 0,"already contents exist");
+        require(attr.soulbound == msg.sender,"attr.soulbound should be minter");
+        require(attr.creator == to,"attr.creator should be same as to address");
         AuthorityTokenInterface authorityContract = AuthorityTokenInterface(authority);
         uint96 vote = authorityContract.getCurrentVotes(msg.sender);
         console.log(msg.sender);
@@ -159,6 +177,7 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
         console.log(contents);
         uint256 id = _currentContentsId++;
         tokenContents[id] = contents;
+        contentsTokens[contents] = id;
         tokenAttributes[id] = attr;
         _mint(msg.sender, to, id);
         setMintTime(id);
@@ -245,10 +264,9 @@ contract ContentsToken is IERC721, Ownable, ERC721Checkpointable {
      */
     function dataURI(uint256 tokenId) public view returns (string memory) {
         require(_exists(tokenId), 'ContentsToken: URI query for nonexistent token');
-
-        string memory contentsId = tokenId.toString();
-        string memory name = string(abi.encodePacked('NounsMap ', contentsId));
-        string memory description = string(abi.encodePacked('NounsMap ', contentsId, ' is a map with photo and movie.'));
+        ContentsAttributes memory attr = tokenAttributes[tokenId];
+        string memory name = string(abi.encodePacked(attr.name));
+        string memory description = string(abi.encodePacked(attr.description));
         string memory url = string(abi.encodePacked(web2Url,tokenContents[tokenId]));
         return  string(abi.encodePacked(
             'data:application/json;base64,',
